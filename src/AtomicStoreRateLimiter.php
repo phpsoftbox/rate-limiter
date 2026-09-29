@@ -4,22 +4,18 @@ declare(strict_types=1);
 
 namespace PhpSoftBox\RateLimiter;
 
-use Closure;
 use InvalidArgumentException;
+use Psr\Clock\ClockInterface;
 
 use function max;
 use function time;
 
 final readonly class AtomicStoreRateLimiter implements RateLimiterInterface
 {
-    private Closure $clock;
-
-    /** @param callable(): int|null $clock */
     public function __construct(
         private AtomicRateLimitStoreInterface $store,
-        ?callable $clock = null,
+        private ?ClockInterface $clock = null,
     ) {
-        $this->clock = $clock === null ? time(...) : Closure::fromCallable($clock);
     }
 
     public function hit(string $key, int $maxAttempts, int $decaySeconds): RateLimitResult
@@ -30,7 +26,7 @@ final readonly class AtomicStoreRateLimiter implements RateLimiterInterface
 
         $counter   = $this->store->increment($key, $decaySeconds);
         $remaining = max(0, $maxAttempts - $counter->attempts);
-        $now       = ($this->clock)();
+        $now       = $this->clock?->now()->getTimestamp() ?? time();
 
         return new RateLimitResult(
             allowed: $counter->attempts <= $maxAttempts,
@@ -39,5 +35,15 @@ final readonly class AtomicStoreRateLimiter implements RateLimiterInterface
             retryAfterSeconds: $counter->retryAfterSeconds,
             resetAt: $now + $counter->retryAfterSeconds,
         );
+    }
+
+    public function attempts(string $key): int
+    {
+        return $this->store->attempts($key);
+    }
+
+    public function reset(string $key): void
+    {
+        $this->store->reset($key);
     }
 }

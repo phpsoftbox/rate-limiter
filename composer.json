@@ -8,6 +8,7 @@
     },
     "require": {
         "php": "^8.5",
+        "psr/clock": "^1.0",
         "psr/simple-cache": "^3.0"
     },
     "require-dev": {
@@ -15,7 +16,7 @@
         "phpunit/phpunit": "^13.3"
     },
     "suggest": {
-        "ext-redis": "Required when RedisRateLimiter is used with the PhpRedis client."
+        "ext-redis": "Required by RedisRateLimiter / RedisAtomicRateLimitStore (PhpRedis client: Redis or RedisCluster)."
     },
     "autoload": {
         "psr-4": {
