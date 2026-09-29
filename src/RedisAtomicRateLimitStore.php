@@ -4,13 +4,20 @@ declare(strict_types=1);
 
 namespace PhpSoftBox\RateLimiter;
 
-use InvalidArgumentException;
+use Redis;
+use RedisCluster;
 use RuntimeException;
 
 use function is_array;
-use function is_callable;
+use function is_numeric;
 use function max;
 
+/**
+ * Атомарное хранилище счётчиков на PhpRedis (ext-redis): `Redis` или `RedisCluster`.
+ *
+ * Другие клиенты (например, Predis с иной сигнатурой `eval()`) подключаются собственной
+ * реализацией AtomicRateLimitStoreInterface.
+ */
 final readonly class RedisAtomicRateLimitStore implements AtomicRateLimitStoreInterface
 {
     private const string LUA = <<<'LUA'
@@ -26,16 +33,9 @@ end
 return {current, ttl}
 LUA;
 
-    private object $redis;
-
-    /** Client must provide the PhpRedis-compatible eval(string, array, int) method. */
-    public function __construct(object $redis)
-    {
-        $this->redis = $redis;
-
-        if (!is_callable([$this->redis, 'eval'])) {
-            throw new InvalidArgumentException('Redis rate-limit store requires an eval-capable client.');
-        }
+    public function __construct(
+        private Redis|RedisCluster $redis,
+    ) {
     }
 
     public function increment(string $key, int $decaySeconds): RateLimitCounter
@@ -49,5 +49,17 @@ LUA;
             attempts: (int) $result[0],
             retryAfterSeconds: max(1, (int) $result[1]),
         );
+    }
+
+    public function attempts(string $key): int
+    {
+        $value = $this->redis->get($key);
+
+        return is_numeric($value) ? (int) $value : 0;
+    }
+
+    public function reset(string $key): void
+    {
+        $this->redis->del($key);
     }
 }
